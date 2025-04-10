@@ -5,6 +5,8 @@ import ssl
 from email.message import EmailMessage
 from datetime import datetime, timedelta
 from utils import generate_ical_event, login_and_book_course
+from dotenv import load_dotenv
+load_dotenv()
 
 def send_email(subject, body, to_email, ical_attachment=None):
     msg = EmailMessage()
