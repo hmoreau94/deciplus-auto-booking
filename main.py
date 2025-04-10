@@ -29,7 +29,7 @@ def send_email(subject, body, to_email, ical_attachment=None):
 def main():
     today = datetime.now()
     target_date = today + timedelta(days=7)
-    weekday = target_date.weekday()  # 0 = Monday, 5 = Saturday
+    weekday = target_date.weekday()
 
     if weekday in range(0, 5):
         course_name = "CrossFit"
@@ -51,8 +51,10 @@ def main():
     elif result['status'] == 'already_reserved':
         send_email("ℹ️ Cours déjà réservé", "Tu avais déjà réservé ce cours.", os.environ['NOTIFY_EMAIL'])
     else:
-        retry_link = "https://github.com/hmoreau94/deciplus-auto-booking/actions/workflows/book-course.yml"  # à adapter
-        send_email("❌ Échec de réservation", f"{result['reason']}\n\n👉 Re-tente ici : {retry_link}", os.environ['NOTIFY_EMAIL'])
+        retry_link = "https://github.com/YOUR_USERNAME/deciplus-auto-booking/actions/workflows/book-course.yml"
+        send_email("❌ Échec de réservation", f"{result['reason']}
+
+👉 Re-tente ici : {retry_link}", os.environ['NOTIFY_EMAIL'])
 
 if __name__ == "__main__":
     main()

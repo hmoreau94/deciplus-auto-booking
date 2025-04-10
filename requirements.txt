@@ -1,5 +1,2 @@
-requests
 ics
-beautifulsoup4
-lxml
 playwright
