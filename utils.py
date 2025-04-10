@@ -3,7 +3,15 @@ from ics import Calendar, Event
 from playwright.sync_api import sync_playwright
 import calendar
 
+##############################
+# 1. Gestion de l'ICal Event #
+##############################
+
 def generate_ical_event(title, start_time_str, end_time_str):
+    """
+    Génère une invitation iCal à partir d'un titre, d'une date de début et de fin.
+    Retourne le fichier iCal encodé en bytes.
+    """
     c = Calendar()
     e = Event()
     e.name = title
@@ -12,7 +20,51 @@ def generate_ical_event(title, start_time_str, end_time_str):
     c.events.add(e)
     return str(c).encode("utf-8")
 
+######################################
+# 2. Gestion du Sticky Header/Colonne #
+######################################
+
+def get_target_header_bb(page, target_date):
+    """
+    Parcourt les blocs du sticky header et retourne la bounding box
+    du header dont le span avec classe "text-primary" correspond au jour cible.
+    """
+    headers = page.locator("div.stickyheader div.header-box")
+    count = headers.count()
+    for i in range(count):
+        header = headers.nth(i)
+        try:
+            day_text = header.locator("span.text-primary").inner_text().strip()
+            if day_text.isdigit() and int(day_text) == target_date.day:
+                bb = header.bounding_box()
+                print(f"[DEBUG] Header cible trouvé : jour {day_text}, bounding box = {bb}")
+                return bb
+        except Exception as e:
+            print(f"[DEBUG] Erreur lors de la lecture d'un header : {e}")
+    print("[DEBUG] Aucun header correspondant trouvé pour le jour cible.")
+    return None
+
+def is_slot_in_header(slot, header_bb):
+    """
+    Vérifie si le centre horizontal du slot se trouve dans la zone définie par la bounding box du header cible.
+    """
+    try:
+        slot_bb = slot.bounding_box()
+        if slot_bb is None:
+            return False
+        slot_center = slot_bb["x"] + slot_bb["width"] / 2
+        in_column = header_bb["x"] <= slot_center <= (header_bb["x"] + header_bb["width"])
+        print(f"[DEBUG] Slot center = {slot_center:.2f}; Header x-range = {header_bb['x']:.2f} - {header_bb['x']+header_bb['width']:.2f} → {in_column}")
+        return in_column
+    except Exception as e:
+        print(f"[DEBUG] Erreur lors de la vérification du slot dans le header : {e}")
+        return False
+
 def go_to_target_week(page, target_date):
+    """
+    Navigue vers la semaine contenant target_date. 
+    Après chaque clic sur l'icône de semaine suivante, la fonction attend que l'état réseau soit inactif et que le header se mette à jour.
+    """
     def get_current_week_header():
         try:
             header = page.locator('span.text-xl.font-bold.text-secondary').inner_text()
@@ -20,10 +72,10 @@ def go_to_target_week(page, target_date):
             return header
         except:
             return ""
-
+        
     def target_in_current_week(header_text, target_date):
         try:
-            # Format attendu: 'April - Week of 7'
+            # Format attendu : 'April - Week of 7'
             month_str, _, day_str = header_text.partition(" - Week of ")
             month_str = month_str.strip()
             day_int = int(day_str.strip())
@@ -39,20 +91,29 @@ def go_to_target_week(page, target_date):
 
     tries = 0
     max_tries = 6
+    current_header = get_current_week_header()
     while tries < max_tries:
-        header = get_current_week_header()
-        if target_in_current_week(header, target_date):
+        if target_in_current_week(current_header, target_date):
             print("[INFO] Bonne semaine atteinte.")
             return
-        print("[INFO] Clic sur semaine suivante...")
+        print("[INFO] Passage à la semaine suivante...")
         page.locator('i.fa-chevron-right').click()
+        # Attendre que la page se mette à jour
+        page.wait_for_load_state("networkidle")
         page.wait_for_timeout(1000)
+        new_header = get_current_week_header()
+        if new_header != current_header:
+            current_header = new_header
         tries += 1
     raise Exception("Impossible d'afficher la bonne semaine dans le calendrier.")
 
+#########################
+# 3. Expansion des slots #
+#########################
+
 def expand_all_view_all(page):
     """
-    Clique sur tous les boutons "View all" pour afficher l'ensemble des créneaux.
+    Clique sur tous les boutons "View all" afin d'afficher tous les créneaux du calendrier.
     """
     try:
         view_all_buttons = page.locator(
@@ -69,17 +130,58 @@ def expand_all_view_all(page):
     except Exception as e:
         print(f"[DEBUG] Erreur lors de l'expansion des 'View all' : {e}")
 
+#####################################
+# 4. Gestion de l'action de booking #
+#####################################
+
+def handle_booking_action(page, date_str, course_name, is_saturday, title):
+    """
+    Gère les trois cas après avoir cliqué sur un timeslot dans le modal de réservation.
+    Cas possibles :
+      - "Cancel my booking" : le cours est déjà réservé.
+      - "Reserve on the waiting list" : réservation effectuée sur la liste d'attente.
+      - "Book" : réservation réussie.
+    """
+    print(f"[INFO] Créneau sélectionné : {title}")
+    modal = page.locator("div.ari-modal-container")
+    modal.wait_for(state="visible", timeout=10000)
+    print("[DEBUG] Conteneur modal détecté.")
+    
+    if modal.locator('button:has-text("Cancel my booking")').count() > 0:
+        print("[INFO] Bouton 'Cancel my booking' détecté dans la modal.")
+        return {"status": "already_reserved", "reason": "Créneau déjà réservé pour cette date."}
+    elif modal.locator('button:has-text("Reserve on the waiting list")').count() > 0:
+        print("[INFO] Bouton 'Reserve on the waiting list' détecté dans la modal.")
+        modal.locator('button:has-text("Reserve on the waiting list")').click()
+        return {"status": "waiting_list", "reason": "Réservé sur la liste d'attente pour cette date."}
+    elif modal.locator('button:has-text("Book")').count() > 0:
+        print("[INFO] Bouton 'Book' détecté dans la modal.")
+        modal.locator('button:has-text("Book")').click()
+        if is_saturday:
+            return {"status": "success", "course_title": title, "start": f"{date_str}T10:00:00", "end": f"{date_str}T11:00:00"}
+        else:
+            return {"status": "success", "course_title": title, "start": f"{date_str}T19:00:00", "end": f"{date_str}T20:00:00"}
+    else:
+        print("[DEBUG] Aucun bouton d'action trouvé dans la modal.")
+        return {"status": "error", "reason": "Aucun bouton d'action trouvé dans la modal pour ce créneau."}
+
+#####################################
+# 5. Fonction principale de réservation #
+#####################################
+
 def login_and_book_course(username, password, course_name, date_str, course_hour):
     """
-    Pour les jours de semaine, course_name doit être "CrossFit" et on recherche le timeslot affichant "7:00" (7:00 PM).
-    Pour le samedi (course_name = "Team Wod"), on recherche le timeslot avec ce titre, sans vérifier l'heure affichée.
+    Pour les jours de semaine, recherche un timeslot "CrossFit" affichant exactement "7:00 PM - 8:00 PM" (pour éviter 7:00 AM et les essais gratuits).
+    Pour le samedi, recherche un timeslot dont le titre contient "Team Wod".
+    Si un header sticky est disponible, vérifie que le slot se trouve dans la bonne colonne.
+    Une fois le slot sélectionné, clique dessus et délègue la gestion du résultat à handle_booking_action.
     """
     target_date = datetime.strptime(date_str, "%Y-%m-%d")
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
+        # Utilisation de la locale en anglais pour garantir le format des horaires
+        context = browser.new_context(locale="en-US")
         page = context.new_page()
-
         try:
             print("[INFO] Accès à la page de connexion...")
             page.goto("https://member-app.deciplus.pro/cfmontpellier/signIn", timeout=60000)
@@ -88,21 +190,25 @@ def login_and_book_course(username, password, course_name, date_str, course_hour
             page.fill('input[type="email"]', username)
             page.fill('input[type="password"]', password)
             print("[INFO] Clic sur le bouton de connexion via #signIn")
-            sign_in_button = page.locator('#signIn')
-            sign_in_button.click()
+            page.locator('#signIn').click()
             page.wait_for_selector("div.timeslot", timeout=15000)
+            
             print("[INFO] Navigation vers la bonne semaine...")
             go_to_target_week(page, target_date)
+            
             print("[INFO] Expansion de tous les créneaux avec 'View all'...")
             expand_all_view_all(page)
-
-            print("[INFO] Recherche du créneau ciblé...")
+            
+            header_bb = get_target_header_bb(page, target_date)
+            if header_bb:
+                print("[DEBUG] Header cible trouvé pour le jour.")
+            else:
+                print("[DEBUG] Aucun header spécifique trouvé, on se base uniquement sur le titre et l'heure.")
+            
+            print("[INFO] Parcours des slots disponibles...")
             page.wait_for_selector("div.timeslot", timeout=10000)
             slots = page.query_selector_all("div.timeslot")
-            
-            # Détermination du mode : jour de semaine (CrossFit) ou samedi (Team Wod)
             is_saturday = (course_name.lower() == "team wod")
-            
             for slot in slots:
                 title_elem = slot.query_selector(".timeslot-title")
                 time_elem = slot.query_selector("div span")
@@ -110,42 +216,29 @@ def login_and_book_course(username, password, course_name, date_str, course_hour
                     continue
                 title = title_elem.inner_text().strip()
                 time_range = time_elem.inner_text().strip()
+                print(f"[DEBUG] Slot trouvé : Titre='{title}', Heure='{time_range}'")
                 
                 if is_saturday:
-                    # Pour samedi, on se contente du titre "Team Wod"
-                    if "team wod" in title.lower():
-                        if "Disponible" in slot.inner_text() or "Available" in slot.inner_text():
-                            slot.click()
-                            page.wait_for_timeout(1000)
-                            submit_btn = page.query_selector('button:has-text("Réserver")')
-                            if submit_btn:
-                                submit_btn.click()
-                                return {
-                                    "status": "success",
-                                    "course_title": title,
-                                    "start": f"{date_str}T10:00:00",
-                                    "end": f"{date_str}T11:00:00"
-                                }
-                            else:
-                                return {"status": "already_reserved", "reason": "Déjà réservé"}
+                    if "team wod" not in title.lower():
+                        print("[DEBUG] Slot ignoré : ce n'est pas Team Wod.")
+                        continue
                 else:
-                    # Pour les jours de semaine, on recherche le timeslot "CrossFit" affichant "7:00"
-                    if "crossfit" in title.lower() and "7:00" in time_range:
-                        if "Disponible" in slot.inner_text() or "Available" in slot.inner_text():
-                            slot.click()
-                            page.wait_for_timeout(1000)
-                            submit_btn = page.query_selector('button:has-text("Réserver")')
-                            if submit_btn:
-                                submit_btn.click()
-                                return {
-                                    "status": "success",
-                                    "course_title": title,
-                                    "start": f"{date_str}T19:00:00",  # backend reservation en 24h (19:00)
-                                    "end": f"{date_str}T20:00:00"
-                                }
-                            else:
-                                return {"status": "already_reserved", "reason": "Déjà réservé"}
-            return {"status": "error", "reason": "Cours introuvable ou complet"}
+                    if ("crossfit" not in title.lower() or 
+                        "7:00 pm - 8:00 pm" not in time_range.lower() or 
+                        "essai gratuit" in title.lower()):
+                        print("[DEBUG] Slot ignoré : critères CrossFit non respectés (7:00 PM - 8:00 PM requis et pas d'essai gratuit).")
+                        continue
+                
+                if header_bb and not is_slot_in_header(slot, header_bb):
+                    print(f"[DEBUG] Slot '{title}' ignoré (hors colonne cible).")
+                    continue
+                
+                print(f"[INFO] Slot ciblé validé : '{title}' avec horaire '{time_range}'. Clic sur le slot.")
+                slot.click()
+                return handle_booking_action(page, date_str, course_name, is_saturday, title)
+            
+            print("[DEBUG] Aucun slot disponible correspondant aux critères trouvés.")
+            return {"status": "error", "reason": "Créneau introuvable ou complet."}
         finally:
             context.close()
             browser.close()

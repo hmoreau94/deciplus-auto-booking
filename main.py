@@ -1,60 +1,50 @@
-
-import os
-import smtplib
-import ssl
-from email.message import EmailMessage
-from datetime import datetime, timedelta
-from utils import generate_ical_event, login_and_book_course
 from dotenv import load_dotenv
 load_dotenv()
 
-def send_email(subject, body, to_email, ical_attachment=None):
-    msg = EmailMessage()
-    msg['Subject'] = subject
-    msg['From'] = os.environ['EMAIL_SENDER']
-    msg['To'] = to_email
-    msg.set_content(body)
-
-    if ical_attachment:
-        msg.add_attachment(
-            ical_attachment,
-            maintype="application",
-            subtype="octet-stream",
-            filename="reservation.ics"
-        )
-
-    context = ssl.create_default_context()
-    with smtplib.SMTP_SSL(os.environ['SMTP_SERVER'], int(os.environ['SMTP_PORT']), context=context) as server:
-        server.login(os.environ['EMAIL_SENDER'], os.environ['EMAIL_SENDER_PASSWORD'])
-        server.send_message(msg)
+import os
+from datetime import datetime, timedelta
+from utils import login_and_book_course, generate_ical_event
 
 def main():
+    # Calcul de la date cible dans 7 jours
     today = datetime.now()
     target_date = today + timedelta(days=7)
-    weekday = target_date.weekday()
+    weekday = target_date.weekday()  # lundi=0, samedi=5, dimanche=6
 
     if weekday in range(0, 5):
         course_name = "CrossFit"
-        course_hour = 19
+        course_hour = 19  # pour les jours de semaine, réservation pour 7:00 PM (19h)
     elif weekday == 5:
         course_name = "Team Wod"
-        course_hour = 10
+        course_hour = 10  # pour le samedi, réservation à 10h
     else:
-        print("No course scheduled for Sunday.")
+        print("[INFO] Aucun cours programmé pour le dimanche.")
         return
 
-    result = login_and_book_course(os.environ['DECIPLUS_USERNAME'],
-                                   os.environ['DECIPLUS_PASSWORD'],
-                                   course_name, target_date.strftime('%Y-%m-%d'), course_hour)
+    print(f"[INFO] Tentative de réservation pour '{course_name}' le {target_date.strftime('%Y-%m-%d')}.")
+    
+    result = login_and_book_course(
+        os.environ.get("DECIPLUS_USERNAME"),
+        os.environ.get("DECIPLUS_PASSWORD"),
+        course_name,
+        target_date.strftime("%Y-%m-%d"),
+        course_hour
+    )
 
-    if result['status'] == 'success':
-        ical = generate_ical_event(result['course_title'], result['start'], result['end'])
-        send_email("✅ Cours réservé avec succès", "Ton cours a bien été réservé 👊", os.environ['NOTIFY_EMAIL'], ical)
-    elif result['status'] == 'already_reserved':
-        send_email("ℹ️ Cours déjà réservé", "Tu avais déjà réservé ce cours.", os.environ['NOTIFY_EMAIL'])
+    print("[INFO] Résultat de la réservation:")
+    print(result)
+
+    if result["status"] == "success":
+        ical = generate_ical_event(result["course_title"], result["start"], result["end"])
+        print("[INFO] Réservation réussie.")
+        # Vous pouvez éventuellement sauvegarder le fichier ICS localement pour vérification :
+        with open("reservation.ics", "wb") as f:
+            f.write(ical)
+        print("[INFO] Invitation iCal sauvegardée sous 'reservation.ics'.")
+    elif result["status"] in ("already_reserved", "waiting_list"):
+        print(f"[INFO] Réservation non effectuée : {result['reason']}")
     else:
-        retry_link = "https://github.com/hmoreau94/deciplus-auto-booking/actions/workflows/book-course.yml"
-        send_email("❌ Échec de réservation", f"{result['reason']} 👉 Re-tente ici : {retry_link}", os.environ['NOTIFY_EMAIL'])
+        print(f"[ERROR] Erreur : {result.get('reason', 'Erreur inconnue')}")
 
 if __name__ == "__main__":
     main()
