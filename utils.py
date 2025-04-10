@@ -22,7 +22,9 @@ def login_and_book_course(username, password, course_name, date_str, course_hour
             page.goto("https://member-app.deciplus.pro/cfmontpellier/signIn", timeout=60000)
             page.fill('input[type="email"]', username)
             page.fill('input[type="password"]', password)
-            page.click('button:has-text("Sign In")')
+            sign_in_button = page.locator('#signIn')
+            sign_in_button.click()
+
             page.wait_for_selector("div.timeslot", timeout=10000)
 
             target_date = datetime.strptime(date_str, "%Y-%m-%d")
