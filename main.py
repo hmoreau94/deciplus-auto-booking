@@ -51,11 +51,8 @@ def main():
     elif result['status'] == 'already_reserved':
         send_email("ℹ️ Cours déjà réservé", "Tu avais déjà réservé ce cours.", os.environ['NOTIFY_EMAIL'])
     else:
-        retry_link = "https://github.com/TON_UTILISATEUR/deciplus-auto-booking/actions/workflows/book-course.yml"  # à adapter
-        send_email("❌ Échec de réservation", f"{result['reason']}
-
-👉 [Re-tenter la réservation]({retry_link})",
-                   os.environ['NOTIFY_EMAIL'])
+        retry_link = "https://github.com/hmoreau94/deciplus-auto-booking/actions/workflows/book-course.yml"  # à adapter
+        send_email("❌ Échec de réservation", f"{result['reason']}\n\n👉 Re-tente ici : {retry_link}", os.environ['NOTIFY_EMAIL'])
 
 if __name__ == "__main__":
     main()
