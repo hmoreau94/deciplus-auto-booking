@@ -1,0 +1,31 @@
+
+name: Book Deciplus Course
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+
+jobs:
+  book:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+      - name: Run booking script
+        env:
+          DECIPLUS_USERNAME: ${{ secrets.DECIPLUS_USERNAME }}
+          DECIPLUS_PASSWORD: ${{ secrets.DECIPLUS_PASSWORD }}
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_SENDER_PASSWORD: ${{ secrets.EMAIL_SENDER_PASSWORD }}
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+        run: python main.py
