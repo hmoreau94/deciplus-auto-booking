@@ -1,3 +1,2 @@
 ics
 playwright
-python-dotenv

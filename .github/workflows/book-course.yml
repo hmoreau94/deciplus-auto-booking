@@ -1,31 +1,55 @@
 
-name: Book Deciplus Course
+name: 📅 Auto Book CrossFit
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 6 * * *'
+    - cron: '0 6 * * *'  # Every day at 06:00 UTC (08:00 CET)
+  workflow_dispatch:
 
 jobs:
-  book:
+  book-crossfit:
     runs-on: ubuntu-latest
+    env:
+      DEBUG_MODE: 0
+
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-      - name: Install dependencies and Playwright
-        run: |
-          pip install -r requirements.txt
-          python -m playwright install chromium
-      - name: Run booking script
-        env:
-          DECIPLUS_USERNAME: ${{ secrets.DECIPLUS_USERNAME }}
-          DECIPLUS_PASSWORD: ${{ secrets.DECIPLUS_PASSWORD }}
-          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
-          EMAIL_SENDER_PASSWORD: ${{ secrets.EMAIL_SENDER_PASSWORD }}
-          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
-        run: python main.py
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v3
+
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        python -m playwright install --with-deps
+
+    - name: 🔐 Load environment variables
+      run: echo "Loaded"
+      env:
+        DECIPLUS_USERNAME: ${{ secrets.DECIPLUS_USERNAME }}
+        DECIPLUS_PASSWORD: ${{ secrets.DECIPLUS_PASSWORD }}
+
+    - name: 🤖 Run booking script
+      id: runscript
+      run: |
+        echo "[INFO] Running main.py..."
+        python main.py > output.log || echo "::error::❌ Booking failed. Check logs."
+
+    - name: 📤 Upload iCal artifact (if exists)
+      if: success()
+      uses: actions/upload-artifact@v3
+      with:
+        name: reservation
+        path: reservation.ics
+        if-no-files-found: ignore
+
+    - name: 📄 Show run summary
+      run: |
+        if test -f "reservation.ics"; then
+          echo "::notice::✅ Booking succeeded. Download your iCal file from the 'Artifacts' section of this run."
+        else
+          echo "::warning::⚠️ No iCal file generated. Either already booked or slot unavailable."
