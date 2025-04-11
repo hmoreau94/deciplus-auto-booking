@@ -34,11 +34,11 @@ jobs:
           python main.py
 
       - name: 📤 Upload iCal artifact (if exists)
-        uses: ./.github/actions/upload-artifact
+        uses: actions/upload-artifact@v3
         with:
           name: reservation
-          path: ./reservation.ics
-          if-no-files-found: warn
+          path: reservation.ics
+          if-no-files-found: ignore
       
       - name: 📋 Show run summary
         run: |
