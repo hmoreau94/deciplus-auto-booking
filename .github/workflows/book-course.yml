@@ -34,7 +34,7 @@ jobs:
           python main.py
 
       - name: 📤 Upload iCal artifact (if exists)
-        uses: actions/upload-artifact@a62be5286d2eaf5f42c7f35b4341453e13e52d61
+        uses: ./.github/actions/upload-artifact
         with:
           name: reservation
           path: ./reservation.ics
