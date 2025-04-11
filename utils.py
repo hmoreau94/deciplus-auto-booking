@@ -2,6 +2,8 @@ from datetime import datetime, timedelta
 from ics import Calendar, Event
 from playwright.sync_api import sync_playwright
 import calendar
+import os
+
 
 ##############################
 # 1. Gestion de l'ICal Event #
@@ -153,10 +155,23 @@ def handle_booking_action(page, date_str, course_name, is_saturday, title):
     elif modal.locator('button:has-text("Reserve on the waiting list")').count() > 0:
         print("[INFO] Bouton 'Reserve on the waiting list' détecté dans la modal.")
         modal.locator('button:has-text("Reserve on the waiting list")').click()
+        page.wait_for_selector("div.ari-modal-container", state="detached", timeout=5000)
+        print("[INFO] Modal closed after successful booking.")
         return {"status": "waiting_list", "reason": "Réservé sur la liste d'attente pour cette date."}
     elif modal.locator('button:has-text("Book")').count() > 0:
         print("[INFO] Bouton 'Book' détecté dans la modal.")
-        modal.locator('button:has-text("Book")').click()
+        book_button = modal.locator('button:has-text("Book")')
+        print(f"[DEBUG] Found {book_button.count()} book buttons in modal")
+        try:
+            book_button.click()
+        except Exception as e:
+            print(f"[ERROR] Failed to click Book: {e}")
+            
+        print("[DEBUG] Clicked the Book button")
+        page.wait_for_selector("div.ari-modal-container", state="detached", timeout=5000)
+        print("[INFO] Modal closed after successful booking.")
+        if os.environ.get("DEBUG_MODE") == "1":
+            page.pause()
         if is_saturday:
             return {"status": "success", "course_title": title, "start": f"{date_str}T10:00:00", "end": f"{date_str}T11:00:00"}
         else:
@@ -178,7 +193,7 @@ def login_and_book_course(username, password, course_name, date_str, course_hour
     """
     target_date = datetime.strptime(date_str, "%Y-%m-%d")
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=False)
         # Utilisation de la locale en anglais pour garantir le format des horaires
         context = browser.new_context(locale="en-US")
         page = context.new_page()

@@ -1,0 +1,22 @@
+{
+  "name": "deciplus-auto-booking",
+  "version": "1.0.0",
+  "description": "Voir instructions fournies par Hugo.",
+  "main": "index.js",
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hmoreau94/deciplus-auto-booking.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hmoreau94/deciplus-auto-booking/issues"
+  },
+  "homepage": "https://github.com/hmoreau94/deciplus-auto-booking#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.51.1",
+    "@types/node": "^22.14.0"
+  }
+}
