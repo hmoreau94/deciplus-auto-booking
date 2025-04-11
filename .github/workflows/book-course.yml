@@ -1,55 +1,41 @@
-
-name: 📅 Auto Book CrossFit
+name: book-crossfit
 
 on:
-  schedule:
-    - cron: '0 6 * * *'  # Every day at 06:00 UTC (08:00 CET)
   workflow_dispatch:
+  schedule:
+    - cron: "30 8 * * *"  # Every day at 08:30 UTC
+
+permissions:
+  contents: read
 
 jobs:
-  book-crossfit:
+  book:
     runs-on: ubuntu-latest
-    env:
-      DEBUG_MODE: 0
 
     steps:
-    - name: 📥 Checkout repository
-      uses: actions/checkout@v3
+      - name: 🧾 Checkout repo
+        uses: actions/checkout@v3.5.2
 
-    - name: 🐍 Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v4.7.0
+        with:
+          python-version: 3.10
 
-    - name: 📦 Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        python -m playwright install --with-deps
+      - name: 📦 Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
 
-    - name: 🔐 Load environment variables
-      run: echo "Loaded"
-      env:
-        DECIPLUS_USERNAME: ${{ secrets.DECIPLUS_USERNAME }}
-        DECIPLUS_PASSWORD: ${{ secrets.DECIPLUS_PASSWORD }}
+      - name: 📚 Run booking script
+        env:
+          DECIPLUS_USERNAME: ${{ secrets.DECIPLUS_USERNAME }}
+          DECIPLUS_PASSWORD: ${{ secrets.DECIPLUS_PASSWORD }}
+        run: |
+          python main.py
 
-    - name: 🤖 Run booking script
-      id: runscript
-      run: |
-        echo "[INFO] Running main.py..."
-        python main.py > output.log || echo "::error::❌ Booking failed. Check logs."
-
-    - name: 📤 Upload iCal artifact (if exists)
-      if: success()
-      uses: actions/upload-artifact@v3
-      with:
-        name: reservation
-        path: reservation.ics
-        if-no-files-found: ignore
-
-    - name: 📄 Show run summary
-      run: |
-        if test -f "reservation.ics"; then
-          echo "::notice::✅ Booking succeeded. Download your iCal file from the 'Artifacts' section of this run."
-        else
-          echo "::warning::⚠️ No iCal file generated. Either already booked or slot unavailable."
+      - name: 📤 Upload iCal artifact (if exists)
+        uses: actions/upload-artifact@v3.1.2
+        with:
+          name: reservation
+          path: ./reservation.ics
+          if-no-files-found: warn
