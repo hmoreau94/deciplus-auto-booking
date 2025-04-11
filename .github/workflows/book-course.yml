@@ -38,14 +38,13 @@ jobs:
       run: |
         echo "[INFO] Running main.py..."
         python main.py > output.log || echo "::error::❌ Booking failed. Check logs."
-
+    
     - name: 📤 Upload iCal artifact (if exists)
-      if: success()
       uses: actions/upload-artifact@v3
       with:
         name: reservation
-        path: reservation.ics
-        if-no-files-found: ignore
+        path: ./reservation.ics
+        if-no-files-found: warn
 
     - name: 📄 Show run summary
       run: |
