@@ -39,3 +39,12 @@ jobs:
           name: reservation
           path: ./reservation.ics
           if-no-files-found: warn
+      
+      - name: 📋 Show run summary
+        run: |
+          echo "## Booking run completed" >> $GITHUB_STEP_SUMMARY
+          if [ -f reservation.ics ]; then
+            echo "- ✅ iCal file created: reservation.ics" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ⚠️ No iCal file found. Booking may have failed or was unnecessary." >> $GITHUB_STEP_SUMMARY
+          fi
