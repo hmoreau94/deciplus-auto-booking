@@ -193,7 +193,7 @@ def login_and_book_course(username, password, course_name, date_str, course_hour
     """
     target_date = datetime.strptime(date_str, "%Y-%m-%d")
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = p.chromium.launch(headless=True)
         # Utilisation de la locale en anglais pour garantir le format des horaires
         context = browser.new_context(locale="en-US")
         page = context.new_page()
