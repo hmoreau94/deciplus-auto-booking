@@ -3,7 +3,7 @@ name: book-crossfit
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 8 * * *"  # Every day at 08:30 UTC
+    - cron: "30 7 * * *"  # Every day at 08:30 UTC
 
 permissions:
   contents: read
